@@ -1,0 +1,5 @@
+<launch>
+<node name="client_node" pkg="rh_action_server" type="rh_action_client" output = "screen"/>
+<node name="server_node" pkg="rh_action_server" type="rh_action_server_w_fdbk" output = "screen"/>
+<node name="lidar_node" pkg="rh_action_server" type="new_lidar_alarm"/>
+</launch>
