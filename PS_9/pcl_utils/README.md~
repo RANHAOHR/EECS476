@@ -24,4 +24,6 @@ Start up a roscore, start up Rviz.
 In another terminal, navigate to the directory containing the point-cloud file.  Run display_pcd_file or find_plane_pcd_file.  Respond to the prompt
 with a valid PCD file name (e.g. kinect_clr_snapshot).
 
-with frame: camera_depth_optical_frame
+with frame: 
+
+          camera_depth_optical_frame

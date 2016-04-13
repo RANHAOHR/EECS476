@@ -58,6 +58,9 @@ public:
      * @param plane_normal output: this function will compute components of the plane normal here
      * @param plane_dist output: scalar (signed) distance of the plane from the origin
      */
+
+    void getDesPts(); 
+
     void fit_points_to_plane(Eigen::MatrixXf points_array, 
         Eigen::Vector3f &plane_normal, 
         double &plane_dist); 
@@ -152,7 +155,9 @@ public:
     Eigen::Vector3d find_avg_color_selected_pts(vector<int> &indices);
     void find_indices_color_match(vector<int> &input_indices,
                     Eigen::Vector3d normalized_avg_color,
-                    double color_match_thresh, vector<int> &output_indices);    
+                    double color_match_thresh, vector<int> &output_indices);   
+
+
 
 private:
     ros::NodeHandle nh_; 

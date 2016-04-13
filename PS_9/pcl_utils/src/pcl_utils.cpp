@@ -880,4 +880,33 @@ void PclUtils::selectCB(const sensor_msgs::PointCloud2ConstPtr& cloud) {
     ROS_INFO("done w/ selected-points callback");
 
     got_selected_points_ = true;
+
+}
+
+void PclUtils::getDesPts() {
+    pcl::PointCloud<pcl::PointXYZ>::Ptr stool_pts(new PointCloud<pcl::PointXYZ>);
+    //PointCloud<pcl::PointXYZ> stool_pts;
+    stool_pts->width = 20;
+    stool_pts->height = 10;
+    stool_pts->is_dense = false; //not sure
+    stool_pts->points.resize(stool_pts->width * stool_pts->height);
+    stool_pts->header.frame_id = "camera_depth_optical_frame";
+
+    for(int i = 0; i < stool_pts->points.size(); ++i){
+        stool_pts->points[i].x = 0.046441;
+        stool_pts->points[i].y = 0.401354;
+        stool_pts->points[i].z = 0.230585;
+    }
+
+  //  pcl::PointXYZRGB stool_pts;
+    std::cout<<"frame_id ="<<stool_pts->header.frame_id<<endl;
+    Eigen::Vector3f plane_normal;
+    double plane_dist;
+    fit_points_to_plane(stool_pts, plane_normal, plane_dist);
+    ROS_INFO("plane dist = %f",plane_dist);
+    ROS_INFO("plane normal = (%f, %f, %f)",plane_normal(0),plane_normal(1),plane_normal(2));
+    patch_normal_ = plane_normal;
+    patch_dist_ = plane_dist;
+
+
 }

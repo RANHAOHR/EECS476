@@ -46,6 +46,8 @@ int main(int argc, char** argv) {
     pcl::PointCloud<pcl::PointXYZ>::Ptr selected_pts_cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>); //ptr to selected pts from Rvis tool
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsampled_kinect_ptr(new pcl::PointCloud<pcl::PointXYZRGB>); //ptr to hold filtered Kinect image
 
+    pcl::PointCloud<pcl::PointXYZ>::Ptr stool_pts_cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>); //ptr to stool pts from Rvis tool    
+
     vector<int> indices;
 
     //load a PCD file using pcl::io function; alternatively, could subscribe to Kinect messages    
@@ -87,7 +89,8 @@ int main(int argc, char** argv) {
     cout << " select a patch of points to find corresponding plane..." << endl; //prompt user action
     //loop to test for new selected-points inputs and compute and display corresponding planar fits 
     while (ros::ok()) {
-        if (pclUtils.got_selected_points()) { //here if user selected a new patch of points
+        if (pclUtils.got_selected_points()) { 
+            //here if user selected a new patch of points
             pclUtils.reset_got_selected_points(); // reset for a future trigger
             pclUtils.get_copy_selected_points(selected_pts_cloud_ptr); //get a copy of the selected points
             cout << "got new patch with number of selected pts = " << selected_pts_cloud_ptr->points.size() << endl;
@@ -100,6 +103,16 @@ int main(int argc, char** argv) {
             pcl::copyPointCloud(*downsampled_kinect_ptr, indices, *plane_pts_ptr); //extract these pts into new cloud
             //the new cloud is a set of points from original cloud, coplanar with selected patch; display the result
             pcl::toROSMsg(*plane_pts_ptr, ros_planar_cloud); //convert to ros message for publication and display
+        }
+        else{
+            ROS_INFO("NO points selescted");
+            pclUtils.getDesPts();
+            ROS_INFO("set points done");
+            find_indices_of_plane_from_patch(pclKinect_clr_ptr, stool_pts_cloud_ptr, indices);
+            pcl::copyPointCloud(*downsampled_kinect_ptr, indices, *plane_pts_ptr); //extract these pts into new cloud
+            //the new cloud is a set of points from original cloud, coplanar with selected patch; display the result
+            pcl::toROSMsg(*plane_pts_ptr, ros_planar_cloud); //convert to ros message for publication and display
+
         }
         pubCloud.publish(ros_cloud); // will not need to keep republishing if display setting is persistent
         pubPlane.publish(ros_planar_cloud); // display the set of points computed to be coplanar w/ selection
