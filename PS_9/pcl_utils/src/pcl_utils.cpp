@@ -90,7 +90,7 @@ Eigen::Affine3f PclUtils::make_affine_from_plane_params(Eigen::Vector4f plane_pa
 void PclUtils::fit_points_to_plane(Eigen::MatrixXf points_mat, Eigen::Vector3f &plane_normal, double &plane_dist) {
     //ROS_INFO("starting identification of plane from data: ");
     int npts = points_mat.cols(); // number of points = number of columns in matrix; check the size
-    
+    ROS_INFO("npts = %d", npts);
     // first compute the centroid of the data:
     //Eigen::Vector3f centroid; // make this member var, centroid_
     centroid_ = Eigen::MatrixXf::Zero(3, 1); // see http://eigen.tuxfamily.org/dox/AsciiQuickReference.txt
@@ -883,21 +883,93 @@ void PclUtils::selectCB(const sensor_msgs::PointCloud2ConstPtr& cloud) {
 
 }
 
-void PclUtils::getDesPts() {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr stool_pts(new PointCloud<pcl::PointXYZ>);
-    //PointCloud<pcl::PointXYZ> stool_pts;
-    stool_pts->width = 20;
-    stool_pts->height = 10;
-    stool_pts->is_dense = false; //not sure
-    stool_pts->points.resize(stool_pts->width * stool_pts->height);
+void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr &stool_pts) {
+    //pcl::PointCloud<pcl::PointXYZ>::Ptr stool_pts(new PointCloud<pcl::PointXYZ>);
+
     stool_pts->header.frame_id = "camera_depth_optical_frame";
 
-    for(int i = 0; i < stool_pts->points.size(); ++i){
-        stool_pts->points[i].x = 0.046441;
-        stool_pts->points[i].y = 0.401354;
-        stool_pts->points[i].z = 0.230585;
-    }
+    //selest 3 points first
+    double pts_1_x = -0.00537778;
+    double pts_1_y = 0.153503000;
+    double pts_1_z = 0.628000000;
 
+    double pts_2_x = 0.226431;
+    double pts_2_y = 0.131731;
+    double pts_2_z = 0.639458;
+
+    double pts_3_x = 0.174162;  ///actual origin in our stool space
+    double pts_3_y = 0.185791;
+    double pts_3_z = 0.555143;
+
+    std::vector<double> vec_1;  //vetors in the stool
+    std::vector<double> vec_2; 
+
+    vec_1.resize(3);
+    vec_2.resize(3);
+
+    vec_1[0] = pts_1_x - pts_3_x; //x
+    vec_1[1] = pts_1_y - pts_3_y; //y
+    vec_1[2] = pts_1_z - pts_3_z; //z
+
+    vec_2[0] = pts_2_x - pts_3_x;
+    vec_2[1] = pts_2_y - pts_3_y;
+    vec_2[2] = pts_2_z - pts_3_z;
+
+    double norm_z = 0.4;  //preset the z of the norm of the stool
+    //compute norm_y
+    double dz = norm_z - pts_3_z;
+    double dy = dz * (vec_2[2] * vec_1[0] - vec_1[2] * vec_2[0]);
+    dy = dy/(vec_1[1] * vec_2[0] - vec_2[1] * vec_1[0]);
+    double norm_y = dy + pts_3_y;
+    //compute norm_x
+    double dx =  -dz * vec_1[2] - dy * vec_1[1];
+    dx = dx/vec_1[0];
+    double norm_x = dx + pts_3_x;
+
+    //get a norm point
+    // std::vector<double> norm_vec;
+    // norm_vec.resize(3);
+    // norm_vec[0] = norm_x;
+    // norm_vec[1] = norm_y;
+    // norm_vec[2] = norm_z;
+
+    ROS_INFO("NORM POINT x = %f", norm_x);
+    ROS_INFO("NORM POINT y = %f", norm_y);
+    ROS_INFO("NORM POINT z = %f", norm_z);
+    //now pick points from input
+    int input_size = input_cloud_ptr->points.size();
+    ROS_INFO("input has %d points", input_size); 
+
+    double dist = 0.0;
+    double pt_dx = 0.0;
+    double pt_dy = 0.0;
+    double pt_dz = 0.0;
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;    
+    double dot_product = 0.0;  
+
+    for(int i = 0; i < input_size; ++i){
+        pt_dx = input_cloud_ptr->points[i].x - pts_3_x;  //what about pts_3, still  = 0
+        pt_dy = input_cloud_ptr->points[i].y - pts_3_y;
+        pt_dz = input_cloud_ptr->points[i].z - pts_3_z;
+        dot_product = pt_dx * dx + pt_dy * dy + pt_dz * dz;
+        if (dot_product < 0.000001 && dot_product > 0){
+            //ROS_INFO("has point that dot product = 0 !!!");
+            dist = sqrt(pt_dx * pt_dx + pt_dy * pt_dy + pt_dz * pt_dz); //euclidean dist
+            if (dist < 0.3){
+                x = input_cloud_ptr->points[i].x;
+                y = input_cloud_ptr->points[i].y;
+                z = input_cloud_ptr->points[i].z;
+                stool_pts->push_back(pcl::PointXYZ(x, y, z));
+
+            }
+        }
+    }     
+
+    // stool_pts->push_back(pcl::PointXYZ(0,0,0));
+    int stool_size = stool_pts->points.size();
+    ROS_INFO("stool has %d points", stool_size);
   //  pcl::PointXYZRGB stool_pts;
     std::cout<<"frame_id ="<<stool_pts->header.frame_id<<endl;
     Eigen::Vector3f plane_normal;
@@ -908,5 +980,54 @@ void PclUtils::getDesPts() {
     patch_normal_ = plane_normal;
     patch_dist_ = plane_dist;
 
+/// about the coke can////////////
+  double can_x = 0.105185;   //pick point from camera space
+  double can_y = 0.0353348;
+  double can_z = 0.57975;
+
+  double can_dx  = can_x - pts_3_x;
+  double can_dy  = can_y - pts_3_y;
+  double can_dz  = can_z - pts_3_z;
+
+  //define stool cordinate x, y
+  //selest pts 2 as x axis, which is vec_2
+  double stool_z = 0.8;
+  double stool_dz = stool_z - pts_3_z;
+  double stool_dy = stool_dz * (dz * vec_2[0] - vec_2[2] * dx);
+  stool_dy = stool_dy/(vec_2[1] * dx - dy * vec_2[0]);
+
+  double stool_dx = -stool_dz * vec_2[2] - stool_dy * vec_2[1];
+  stool_dx =  stool_dx/vec_2[0];
+  
+  //dot product in x axis
+  double dot_can = can_dx * vec_2[0] + can_dy * vec_2[1] + can_dz * vec_2[2];
+  double stool_can_x = dot_can/sqrt(vec_2[0]*vec_2[0] +vec_2[1]*vec_2[1] +vec_2[2] * vec_2[2]);
+
+  //dot product in y axis
+  dot_can = can_dx * stool_dx + can_dy * stool_dy + can_dz * stool_dz;
+  double stool_can_y = dot_can/sqrt(stool_dx * stool_dx + stool_dy * stool_dy + stool_dz * stool_dz);
+
+  //dot product in z axis
+  dot_can = can_dx * dx + can_dy * dy + can_dz * dz;
+  double stool_can_z = dot_can/sqrt(dx * dx + dy * dy + dz * dz);  
+  
+  ROS_INFO("x of can in stool coordinate: %f", stool_can_x);
+  ROS_INFO("y of can in stool coordinate: %f", stool_can_y);
+  ROS_INFO("z of can in stool coordinate: %f", stool_can_z);
+
+//// camera focal point in stool space
+  double camera_x = 0.0;  
+  double camera_y = 0.0; 
+  double camera_z = 0.0; 
+
+  double stool_camera_x  = camera_x - pts_3_x;
+  double stool_camera_y  = camera_y - pts_3_y;
+  double stool_camera_z  = camera_z - pts_3_z;
+
+  //use norm vec
+  double dot_cam = stool_camera_x * dx + stool_camera_y * dy + stool_camera_z * dz;
+  double norm_size = sqrt(dx * dx + dy * dy + dz * dz);
+  double height = dot_cam/norm_size;
+  ROS_INFO("The height of the camera in stool coordinate is: %f", height);
 
 }

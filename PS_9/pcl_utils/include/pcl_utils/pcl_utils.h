@@ -59,7 +59,7 @@ public:
      * @param plane_dist output: scalar (signed) distance of the plane from the origin
      */
 
-    void getDesPts(); 
+    void getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr &stool_pts); 
 
     void fit_points_to_plane(Eigen::MatrixXf points_array, 
         Eigen::Vector3f &plane_normal, 
