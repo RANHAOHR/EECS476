@@ -882,7 +882,7 @@ void PclUtils::selectCB(const sensor_msgs::PointCloud2ConstPtr& cloud) {
     got_selected_points_ = true;
 
 }
-
+//****************** the added func **************************************//
 void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr &stool_pts) {
     //pcl::PointCloud<pcl::PointXYZ>::Ptr stool_pts(new PointCloud<pcl::PointXYZ>);
 
