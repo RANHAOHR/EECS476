@@ -59,18 +59,18 @@ public:
      * @param plane_dist output: scalar (signed) distance of the plane from the origin
      */
 
-    void getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr &stool_pts);
+    void getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &stool_pts);
     void getCanPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &can_pts); 
-    bool matchColor(Eigen::Vector3i inputColor, Eigen::Vector3i compColor);
-    Eigen::Vector3i getColor_on_position(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointXYZ point);
 
+    void find_final_cloud(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &outputCloud);
+    void from_RGB_to_XYZ(pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgbCloud, pcl::PointCloud<pcl::PointXYZ>::Ptr &xyzCloud);
     
     void fit_points_to_plane(Eigen::MatrixXf points_array, 
         Eigen::Vector3f &plane_normal, 
         double &plane_dist); 
     Eigen::Vector3f compute_centroid(pcl::PointCloud<pcl::PointXYZ>::Ptr input_cloud_ptr);
     Eigen::Vector3f  compute_centroid(pcl::PointCloud<pcl::PointXYZ> &input_cloud);
-    
+    void fit_points_to_plane(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, Eigen::Vector3f &plane_normal, double &plane_dist);
     void fit_points_to_plane(pcl::PointCloud<pcl::PointXYZ>::Ptr input_cloud_ptr,Eigen::Vector3f &plane_normal, double &plane_dist);
     void fit_xformed_selected_pts_to_plane(Eigen::Vector3f &plane_normal, double &plane_dist);  
 

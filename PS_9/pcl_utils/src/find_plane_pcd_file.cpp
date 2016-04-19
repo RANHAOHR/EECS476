@@ -46,15 +46,17 @@ int main(int argc, char** argv) {
     pcl::PointCloud<pcl::PointXYZ>::Ptr selected_pts_cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>); //ptr to selected pts from Rvis tool
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsampled_kinect_ptr(new pcl::PointCloud<pcl::PointXYZRGB>); //ptr to hold filtered Kinect image
 
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr stool_pts_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>); //ptr to stool pts from Rvis tool    
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr rough_stool_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>); //ptr to stool pts from Rvis tool    
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr can_pts_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr Stool_xyz_ptr(new pcl::PointCloud<pcl::PointXYZ>);
 
     vector<int> indices;
 
     //load a PCD file using pcl::io function; alternatively, could subscribe to Kinect messages    
-    string fname;
-    cout << "enter pcd file name: "; //prompt to enter file name
-    cin >> fname;
+    string fname = "/home/user/ros_ws/src/EECS476/PS_9/pcd_images/coke_can.pcd";
+    //cout << "enter pcd file name: "; //prompt to enter file name
+    //cin >> fname;
     if (pcl::io::loadPCDFile<pcl::PointXYZRGB> (fname, *pclKinect_clr_ptr) == -1) //* load the file
     {
         ROS_ERROR("Couldn't read file \n");
@@ -93,8 +95,7 @@ int main(int argc, char** argv) {
     sensor_msgs::PointCloud2 stoolPts; //create a ROS message
     ros::Publisher Stool = nh.advertise<sensor_msgs::PointCloud2> ("/stoolpts", 1);
     
-    pclUtils.getDesPts(pclKinect_clr_ptr, stool_pts_cloud_ptr);
-    pcl::toROSMsg(*stool_pts_cloud_ptr, stoolPts);
+    pclUtils.getDesPts(pclKinect_clr_ptr, rough_stool_cloud_ptr);
 
     sensor_msgs::PointCloud2 canPts;
     ros::Publisher Can = nh.advertise<sensor_msgs::PointCloud2> ("/canpts", 1);
@@ -102,35 +103,24 @@ int main(int argc, char** argv) {
     pcl::toROSMsg(*can_pts_cloud_ptr, canPts);
 
 
-
-    find_indices_of_plane_from_patch(downsampled_kinect_ptr, stool_pts_cloud_ptr, indices);
+    pclUtils.from_RGB_to_XYZ(rough_stool_cloud_ptr, Stool_xyz_ptr);
+    find_indices_of_plane_from_patch(downsampled_kinect_ptr, Stool_xyz_ptr, indices);    
     pcl::copyPointCloud(*downsampled_kinect_ptr, indices, *plane_pts_ptr); //extract these pts into new cloud
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr final_stool_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>); //ptr to stool pts from Rvis tool 
+    pclUtils.find_final_cloud(plane_pts_ptr, final_stool_cloud_ptr);
+    pcl::toROSMsg(*final_stool_cloud_ptr, stoolPts);
     //the new cloud is a set of points from original cloud, coplanar with selected patch; display the result
-    pcl::toROSMsg(*plane_pts_ptr, ros_planar_cloud); //convert to ros message for publication and display
+    pcl::toROSMsg(*plane_pts_ptr, stool_planar_cloud); //convert to ros message for publication and display
 
     //loop to test for new selected-points inputs and compute and display corresponding planar fits 
     while (ros::ok()) {
-        // if (pclUtils.got_selected_points()) { 
-        //     //here if user selected a new patch of points
-        //     pclUtils.reset_got_selected_points(); // reset for a future trigger
-        //     pclUtils.get_copy_selected_points(selected_pts_cloud_ptr); //get a copy of the selected points
-        //     cout << "got new patch with number of selected pts = " << selected_pts_cloud_ptr->points.size() << endl;
-
-        //     //find pts coplanar w/ selected patch, using PCL methods in above-defined function
-        //     //"indices" will get filled with indices of points that are approx co-planar with the selected patch
-        //     // can extract indices from original cloud, or from voxel-filtered (down-sampled) cloud
-        //     //find_indices_of_plane_from_patch(pclKinect_clr_ptr, selected_pts_cloud_ptr, indices);
-        //     find_indices_of_plane_from_patch(downsampled_kinect_ptr, selected_pts_cloud_ptr, indices);
-        //     pcl::copyPointCloud(*downsampled_kinect_ptr, indices, *plane_pts_ptr); //extract these pts into new cloud
-        //     //the new cloud is a set of points from original cloud, coplanar with selected patch; display the result
-        //     pcl::toROSMsg(*plane_pts_ptr, ros_planar_cloud); //convert to ros message for publication and display
-        // }
 
         Stool.publish(stoolPts);  
         Can.publish(canPts);
 
         pubCloud.publish(ros_cloud); // will not need to keep republishing if display setting is persistent
-        pubPlane.publish(ros_planar_cloud); // display the set of points computed to be coplanar w/ selection
+        pubPlane.publish(stool_planar_cloud); // display the set of points computed to be coplanar w/ selection
         pubDnSamp.publish(downsampled_cloud); //can directly publish a pcl::PointCloud2!!
         ros::spinOnce(); //pclUtils needs some spin cycles to invoke callbacks for new selected points
         ros::Duration(0.1).sleep();

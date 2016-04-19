@@ -220,6 +220,14 @@ void PclUtils::fit_points_to_plane(pcl::PointCloud<pcl::PointXYZ>::Ptr input_clo
 
 }
 
+void PclUtils::fit_points_to_plane(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, Eigen::Vector3f &plane_normal, double &plane_dist) {
+
+	pcl::PointCloud<pcl::PointXYZ>::Ptr temp_cloud(new pcl::PointCloud<pcl::PointXYZ>); //pointer for color version of pointcloud
+	from_RGB_to_XYZ(input_cloud_ptr, temp_cloud);
+    fit_points_to_plane(temp_cloud, plane_normal, plane_dist);
+
+}
+
 //compute and return the centroid of a pointCloud
 Eigen::Vector3f  PclUtils::compute_centroid(pcl::PointCloud<pcl::PointXYZ>::Ptr input_cloud_ptr) {
     Eigen::Vector3f centroid;
@@ -883,51 +891,55 @@ void PclUtils::selectCB(const sensor_msgs::PointCloud2ConstPtr& cloud) {
 
 }
 //****************** the added func **************************************//
-bool PclUtils::matchColor(Eigen::Vector3i inputColor, Eigen::Vector3i compColor){
-    double deltaR = abs(inputColor[0] - compColor[0]) / 255.0;
-    double deltaG = abs(inputColor[1] - compColor[1]) / 255.0;
-    double deltaB = abs(inputColor[2] - compColor[2]) / 255.0;
-    double delta = sqrt(deltaR*deltaR + deltaG*deltaG + deltaB*deltaB);
-    if (delta < 0.01){
-       return true;
-    }
-    else {return false;}
-}
-Eigen::Vector3i PclUtils::getColor_on_position(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointXYZ point){
-    int input_size = input_cloud_ptr->points.size();
-    double x = point.x;
-    double y = point.y;
-    double z = point.z;
-    double dx = 0.0;
-    double dy = 0.0;
-    double dz = 0.0;
+void PclUtils::find_final_cloud(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &outputCloud){
+	double centroid_x = 0.174162;  ///actual origin in our stool space
+    double centroid_y = 0.185791;
+    double centroid_z = 0.555143;
     double dist = 0.0;
+    double dx =0.0;
+    double dy =0.0;
+    double dz =0.0;
 
-    Eigen::Vector3i tempColor;
-    Eigen::Vector3i desColor;
+    pcl::PointXYZRGB temp_point;
 
-    for(int i = 0; i < input_size; ++i){
-        dx = input_cloud_ptr->points[i].x - x;  //what about pts_3, still  = 0
-        dy = input_cloud_ptr->points[i].y - y;
-        dz = input_cloud_ptr->points[i].z - z;
+    outputCloud->header.frame_id = input_cloud_ptr->header.frame_id;
+    outputCloud->is_dense = input_cloud_ptr->is_dense;    
+
+    int input_size = input_cloud_ptr->points.size();
+    for (int i = 0; i < input_size; ++i)
+    {
+    	dx = input_cloud_ptr->points[i].x - centroid_x;  //what about pts_3, still  = 0
+        dy = input_cloud_ptr->points[i].y - centroid_y;
+        dz = input_cloud_ptr->points[i].z - centroid_z;
         dist = sqrt(dx * dx + dy * dy + dz * dz);
-        tempColor = input_cloud_ptr->points[i].getRGBVector3i();
-        if (dist < 0.0000000001){
-            desColor[0] = tempColor[0];
-            desColor[1] = tempColor[1];
-            desColor[2] = tempColor[2];
+        if (dist < 0.32)
+        {
+        	temp_point = input_cloud_ptr->points[i];
+
+            outputCloud->push_back(temp_point);
         }
     }
-
-    return desColor;
-
+    int outputsize = outputCloud->points.size();
+    ROS_INFO("final_cloud has %d points", outputsize);
 }
 
+void PclUtils::from_RGB_to_XYZ(pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgbCloud, pcl::PointCloud<pcl::PointXYZ>::Ptr &xyzCloud){
+     int input_size = rgbCloud->points.size();
+     xyzCloud->header = rgbCloud->header;
+     xyzCloud->is_dense = rgbCloud->is_dense;
+     xyzCloud->points.resize(input_size);
+
+    for(int i = 0; i < input_size; ++i){
+       xyzCloud->points[i].getVector3fMap() = rgbCloud->points[i].getVector3fMap();
+    }
+
+
+}
 void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &stool_pts) {
     //pcl::PointCloud<pcl::PointXYZ>::Ptr stool_pts(new PointCloud<pcl::PointXYZ>);
 
     stool_pts->header.frame_id = "camera_depth_optical_frame";
-
+    stool_pts->is_dense = input_cloud_ptr->is_dense;
     //selest 3 points first
     double pts_1_x = -0.00537778;
     double pts_1_y = 0.153503000;
@@ -980,32 +992,21 @@ void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr,
     double dot_product = 0.0;  
 
     pcl::PointXYZRGB temp_point;
-    bool color_compar;
-    Eigen::Vector3i stool_color;
-
-    pcl::PointXYZ point_stool;
-    point_stool.x = pts_3_x;
-    point_stool.y = pts_3_y;
-    point_stool.z = pts_3_z;
-
-    stool_color = getColor_on_position(input_cloud_ptr, point_stool);
 
     for(int i = 0; i < input_size; ++i){
         pt_dx = input_cloud_ptr->points[i].x - pts_3_x;  //what about pts_3, still  = 0
         pt_dy = input_cloud_ptr->points[i].y - pts_3_y;
         pt_dz = input_cloud_ptr->points[i].z - pts_3_z;
-        dot_product = pt_dx * dx + pt_dy * dy + pt_dz * dz;
-        if (dot_product < 0.000001 && dot_product > 0){
+         dot_product = pt_dx * dx + pt_dy * dy + pt_dz * dz;
+         if (dot_product < 0.000001 && dot_product > 0){
             //ROS_INFO("has point that dot product = 0 !!!");
-            dist = sqrt(pt_dx * pt_dx + pt_dy * pt_dy + pt_dz * pt_dz); //euclidean dist
-            if (dist < 1){
-                temp_point = input_cloud_ptr->points[i];
 
-                color_compar = matchColor(temp_point.getRGBVector3i(),stool_color); 
-                if (color_compar){
-                
+            dist = sqrt(pt_dx * pt_dx + pt_dy * pt_dy + pt_dz * pt_dz); //euclidean dist
+            if (dist < 3){
+                 temp_point = input_cloud_ptr->points[i];
+
                 stool_pts->push_back(temp_point);
-                }
+             //   }
 
             }
         }
@@ -1014,10 +1015,14 @@ void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr,
     // stool_pts->push_back(pcl::PointXYZ(0,0,0));
     int stool_size = stool_pts->points.size();
     ROS_INFO("stool has %d points", stool_size);
-  //  pcl::PointXYZRGB stool_pts;
-    std::cout<<"frame_id ="<<stool_pts->header.frame_id<<endl;
+    //  pcl::PointXYZRGB stool_pts;
+
     Eigen::Vector3f plane_normal;
     double plane_dist;
+    // for (int i = 0; i < stool_size; ++i)
+    // {
+    //     cout<<stool_pts->points[i].getVector3fMap().transpose() <<endl; 
+    // }
     fit_points_to_plane(stool_pts, plane_normal, plane_dist);
     ROS_INFO("plane dist = %f",plane_dist);
     ROS_INFO("plane normal = (%f, %f, %f)",plane_normal(0),plane_normal(1),plane_normal(2));
@@ -1042,5 +1047,62 @@ void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr,
 }
 
 void PclUtils::getCanPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &can_pts){
+
+     double can_x = 0.105185;
+     double can_y = 0.0353348;
+     double can_z = 0.57975; 
+
+    double dist = 0.0;
+    double dx =0.0;
+    double dy =0.0;
+    double dz =0.0;
+
+    pcl::PointXYZRGB temp_point;
+
+    can_pts->header.frame_id = input_cloud_ptr->header.frame_id;
+    can_pts->is_dense = input_cloud_ptr->is_dense;  
+
+    Eigen::Vector3i can_color;
+    can_color << 254, 254, 254;
+    double deltaR = 0.0;
+    double deltaG = 0.0;
+    double deltaB = 0.0;
+    double delta_color = 0.0;
+
+    Eigen::Vector3i point_color;
+
+    int input_size = input_cloud_ptr->points.size();
+    for (int i = 0; i < input_size; ++i)
+    {
+    	dx = input_cloud_ptr->points[i].x - can_x;  //what about pts_3, still  = 0
+        dy = input_cloud_ptr->points[i].y - can_y;
+        dz = input_cloud_ptr->points[i].z - can_z;
+        dist = sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist < 0.06)
+        {
+        	point_color = input_cloud_ptr->points[i].getRGBVector3i();
+            deltaR = abs(point_color[0] - can_color[0]) / 255.0;
+            deltaG = abs(point_color[1] - can_color[1]) / 255.0;
+            deltaB = abs(point_color[2] - can_color[2]) / 255.0;
+            delta_color = sqrt(deltaR * deltaR + deltaG *deltaG  + deltaB * deltaB);
+            if (delta_color < 0.29)
+            {
+                temp_point = input_cloud_ptr->points[i];
+
+                can_pts->push_back(temp_point);
+            }
+        }
+    }
+    int cansize = can_pts->points.size();
+    ROS_INFO("can cloud has %d points", cansize);
+    
+
+    // first compute the centroid of the data:
+    //Eigen::Vector3f centroid; // make this member var, centroid_
+    pcl::PointCloud<pcl::PointXYZ>::Ptr can_xyz(new pcl::PointCloud<pcl::PointXYZ>); 
+    from_RGB_to_XYZ(can_pts, can_xyz);
+    Eigen::Vector3f centroid_ = compute_centroid(can_xyz); // see http://eigen.tuxfamily.org/dox/AsciiQuickReference.txt
+   
+    cout<<"can top centroid: "<<centroid_.transpose()<<endl;
 
 } 
