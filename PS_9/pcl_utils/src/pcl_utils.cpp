@@ -890,7 +890,7 @@ void PclUtils::selectCB(const sensor_msgs::PointCloud2ConstPtr& cloud) {
     got_selected_points_ = true;
 
 }
-//****************** the added func **************************************//
+//**************************** the added func **************************************//
 void PclUtils::find_final_cloud(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &outputCloud){
 	double centroid_x = 0.174162;  ///actual origin in our stool space
     double centroid_y = 0.185791;

@@ -107,11 +107,14 @@ int main(int argc, char** argv) {
     find_indices_of_plane_from_patch(downsampled_kinect_ptr, Stool_xyz_ptr, indices);    
     pcl::copyPointCloud(*downsampled_kinect_ptr, indices, *plane_pts_ptr); //extract these pts into new cloud
 
+    pcl::toROSMsg(*plane_pts_ptr, stool_planar_cloud); //rough stool cloud
+
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr final_stool_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>); //ptr to stool pts from Rvis tool 
     pclUtils.find_final_cloud(plane_pts_ptr, final_stool_cloud_ptr);
-    pcl::toROSMsg(*final_stool_cloud_ptr, stoolPts);
+
+    pcl::toROSMsg(*final_stool_cloud_ptr, stoolPts); //final stool cloud
     //the new cloud is a set of points from original cloud, coplanar with selected patch; display the result
-    pcl::toROSMsg(*plane_pts_ptr, stool_planar_cloud); //convert to ros message for publication and display
+
 
     //loop to test for new selected-points inputs and compute and display corresponding planar fits 
     while (ros::ok()) {
