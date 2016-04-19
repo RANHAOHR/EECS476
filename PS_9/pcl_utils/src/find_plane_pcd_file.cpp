@@ -46,7 +46,8 @@ int main(int argc, char** argv) {
     pcl::PointCloud<pcl::PointXYZ>::Ptr selected_pts_cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>); //ptr to selected pts from Rvis tool
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsampled_kinect_ptr(new pcl::PointCloud<pcl::PointXYZRGB>); //ptr to hold filtered Kinect image
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr stool_pts_cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>); //ptr to stool pts from Rvis tool    
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr stool_pts_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>); //ptr to stool pts from Rvis tool    
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr can_pts_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
 
     vector<int> indices;
 
@@ -67,7 +68,7 @@ int main(int argc, char** argv) {
     ros::Publisher pubPlane = nh.advertise<sensor_msgs::PointCloud2> ("planar_pts", 1);
     ros::Publisher pubDnSamp = nh.advertise<sensor_msgs::PointCloud2> ("downsampled_pcd", 1);
 
-    sensor_msgs::PointCloud2 ros_cloud, ros_planar_cloud, downsampled_cloud; //here are ROS-compatible messages
+    sensor_msgs::PointCloud2 ros_cloud, stool_planar_cloud, downsampled_cloud; //here are ROS-compatible messages
     pcl::toROSMsg(*pclKinect_clr_ptr, ros_cloud); //convert from PCL cloud to ROS message this way
 
     //use voxel filtering to downsample the original cloud:
@@ -87,6 +88,26 @@ int main(int argc, char** argv) {
     g_pcl_utils_ptr = &pclUtils; // make this object shared globally, so above fnc can use it too
 
     cout << " select a patch of points to find corresponding plane..." << endl; //prompt user action
+
+//******************************************************************//
+    sensor_msgs::PointCloud2 stoolPts; //create a ROS message
+    ros::Publisher Stool = nh.advertise<sensor_msgs::PointCloud2> ("/stoolpts", 1);
+    
+    pclUtils.getDesPts(pclKinect_clr_ptr, stool_pts_cloud_ptr);
+    pcl::toROSMsg(*stool_pts_cloud_ptr, stoolPts);
+
+    sensor_msgs::PointCloud2 canPts;
+    ros::Publisher Can = nh.advertise<sensor_msgs::PointCloud2> ("/canpts", 1);
+    pclUtils.getCanPts(pclKinect_clr_ptr, can_pts_cloud_ptr);
+    pcl::toROSMsg(*can_pts_cloud_ptr, canPts);
+
+
+
+    find_indices_of_plane_from_patch(downsampled_kinect_ptr, stool_pts_cloud_ptr, indices);
+    pcl::copyPointCloud(*downsampled_kinect_ptr, indices, *plane_pts_ptr); //extract these pts into new cloud
+    //the new cloud is a set of points from original cloud, coplanar with selected patch; display the result
+    pcl::toROSMsg(*plane_pts_ptr, ros_planar_cloud); //convert to ros message for publication and display
+
     //loop to test for new selected-points inputs and compute and display corresponding planar fits 
     while (ros::ok()) {
         // if (pclUtils.got_selected_points()) { 
@@ -104,22 +125,15 @@ int main(int argc, char** argv) {
         //     //the new cloud is a set of points from original cloud, coplanar with selected patch; display the result
         //     pcl::toROSMsg(*plane_pts_ptr, ros_planar_cloud); //convert to ros message for publication and display
         // }
-        // else{
 
-            ROS_INFO("NO points selescted");
-            pclUtils.getDesPts(pclKinect_clr_ptr, stool_pts_cloud_ptr);
-            ROS_INFO("set points done");
-            find_indices_of_plane_from_patch(downsampled_kinect_ptr, stool_pts_cloud_ptr, indices);
-            pcl::copyPointCloud(*downsampled_kinect_ptr, indices, *plane_pts_ptr); //extract these pts into new cloud
-            //the new cloud is a set of points from original cloud, coplanar with selected patch; display the result
-            pcl::toROSMsg(*plane_pts_ptr, ros_planar_cloud); //convert to ros message for publication and display
+        Stool.publish(stoolPts);  
+        Can.publish(canPts);
 
-        //}
         pubCloud.publish(ros_cloud); // will not need to keep republishing if display setting is persistent
         pubPlane.publish(ros_planar_cloud); // display the set of points computed to be coplanar w/ selection
         pubDnSamp.publish(downsampled_cloud); //can directly publish a pcl::PointCloud2!!
         ros::spinOnce(); //pclUtils needs some spin cycles to invoke callbacks for new selected points
-        ros::Duration(5).sleep();
+        ros::Duration(0.1).sleep();
     }
 
     return 0;

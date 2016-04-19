@@ -883,7 +883,47 @@ void PclUtils::selectCB(const sensor_msgs::PointCloud2ConstPtr& cloud) {
 
 }
 //****************** the added func **************************************//
-void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr &stool_pts) {
+bool PclUtils::matchColor(Eigen::Vector3i inputColor, Eigen::Vector3i compColor){
+    double deltaR = abs(inputColor[0] - compColor[0]) / 255.0;
+    double deltaG = abs(inputColor[1] - compColor[1]) / 255.0;
+    double deltaB = abs(inputColor[2] - compColor[2]) / 255.0;
+    double delta = sqrt(deltaR*deltaR + deltaG*deltaG + deltaB*deltaB);
+    if (delta < 0.01){
+       return true;
+    }
+    else {return false;}
+}
+Eigen::Vector3i PclUtils::getColor_on_position(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointXYZ point){
+    int input_size = input_cloud_ptr->points.size();
+    double x = point.x;
+    double y = point.y;
+    double z = point.z;
+    double dx = 0.0;
+    double dy = 0.0;
+    double dz = 0.0;
+    double dist = 0.0;
+
+    Eigen::Vector3i tempColor;
+    Eigen::Vector3i desColor;
+
+    for(int i = 0; i < input_size; ++i){
+        dx = input_cloud_ptr->points[i].x - x;  //what about pts_3, still  = 0
+        dy = input_cloud_ptr->points[i].y - y;
+        dz = input_cloud_ptr->points[i].z - z;
+        dist = sqrt(dx * dx + dy * dy + dz * dz);
+        tempColor = input_cloud_ptr->points[i].getRGBVector3i();
+        if (dist < 0.0000000001){
+            desColor[0] = tempColor[0];
+            desColor[1] = tempColor[1];
+            desColor[2] = tempColor[2];
+        }
+    }
+
+    return desColor;
+
+}
+
+void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &stool_pts) {
     //pcl::PointCloud<pcl::PointXYZ>::Ptr stool_pts(new PointCloud<pcl::PointXYZ>);
 
     stool_pts->header.frame_id = "camera_depth_optical_frame";
@@ -926,16 +966,6 @@ void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr,
     dx = dx/vec_1[0];
     double norm_x = dx + pts_3_x;
 
-    //get a norm point
-    // std::vector<double> norm_vec;
-    // norm_vec.resize(3);
-    // norm_vec[0] = norm_x;
-    // norm_vec[1] = norm_y;
-    // norm_vec[2] = norm_z;
-
-    ROS_INFO("NORM POINT x = %f", norm_x);
-    ROS_INFO("NORM POINT y = %f", norm_y);
-    ROS_INFO("NORM POINT z = %f", norm_z);
     //now pick points from input
     int input_size = input_cloud_ptr->points.size();
     ROS_INFO("input has %d points", input_size); 
@@ -949,6 +979,17 @@ void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr,
     double z = 0.0;    
     double dot_product = 0.0;  
 
+    pcl::PointXYZRGB temp_point;
+    bool color_compar;
+    Eigen::Vector3i stool_color;
+
+    pcl::PointXYZ point_stool;
+    point_stool.x = pts_3_x;
+    point_stool.y = pts_3_y;
+    point_stool.z = pts_3_z;
+
+    stool_color = getColor_on_position(input_cloud_ptr, point_stool);
+
     for(int i = 0; i < input_size; ++i){
         pt_dx = input_cloud_ptr->points[i].x - pts_3_x;  //what about pts_3, still  = 0
         pt_dy = input_cloud_ptr->points[i].y - pts_3_y;
@@ -957,11 +998,14 @@ void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr,
         if (dot_product < 0.000001 && dot_product > 0){
             //ROS_INFO("has point that dot product = 0 !!!");
             dist = sqrt(pt_dx * pt_dx + pt_dy * pt_dy + pt_dz * pt_dz); //euclidean dist
-            if (dist < 0.3){
-                x = input_cloud_ptr->points[i].x;
-                y = input_cloud_ptr->points[i].y;
-                z = input_cloud_ptr->points[i].z;
-                stool_pts->push_back(pcl::PointXYZ(x, y, z));
+            if (dist < 1){
+                temp_point = input_cloud_ptr->points[i];
+
+                color_compar = matchColor(temp_point.getRGBVector3i(),stool_color); 
+                if (color_compar){
+                
+                stool_pts->push_back(temp_point);
+                }
 
             }
         }
@@ -980,41 +1024,6 @@ void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr,
     patch_normal_ = plane_normal;
     patch_dist_ = plane_dist;
 
-/// about the coke can////////////
-  double can_x = 0.105185;   //pick point from camera space
-  double can_y = 0.0353348;
-  double can_z = 0.57975;
-
-  double can_dx  = can_x - pts_3_x;
-  double can_dy  = can_y - pts_3_y;
-  double can_dz  = can_z - pts_3_z;
-
-  //define stool cordinate x, y
-  //selest pts 2 as x axis, which is vec_2
-  double stool_z = 0.8;
-  double stool_dz = stool_z - pts_3_z;
-  double stool_dy = stool_dz * (dz * vec_2[0] - vec_2[2] * dx);
-  stool_dy = stool_dy/(vec_2[1] * dx - dy * vec_2[0]);
-
-  double stool_dx = -stool_dz * vec_2[2] - stool_dy * vec_2[1];
-  stool_dx =  stool_dx/vec_2[0];
-  
-  //dot product in x axis
-  double dot_can = can_dx * vec_2[0] + can_dy * vec_2[1] + can_dz * vec_2[2];
-  double stool_can_x = dot_can/sqrt(vec_2[0]*vec_2[0] +vec_2[1]*vec_2[1] +vec_2[2] * vec_2[2]);
-
-  //dot product in y axis
-  dot_can = can_dx * stool_dx + can_dy * stool_dy + can_dz * stool_dz;
-  double stool_can_y = dot_can/sqrt(stool_dx * stool_dx + stool_dy * stool_dy + stool_dz * stool_dz);
-
-  //dot product in z axis
-  dot_can = can_dx * dx + can_dy * dy + can_dz * dz;
-  double stool_can_z = dot_can/sqrt(dx * dx + dy * dy + dz * dz);  
-  
-  ROS_INFO("x of can in stool coordinate: %f", stool_can_x);
-  ROS_INFO("y of can in stool coordinate: %f", stool_can_y);
-  ROS_INFO("z of can in stool coordinate: %f", stool_can_z);
-
 //// camera focal point in stool space
   double camera_x = 0.0;  
   double camera_y = 0.0; 
@@ -1031,3 +1040,7 @@ void PclUtils::getDesPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr,
   ROS_INFO("The height of the camera in stool coordinate is: %f", height);
 
 }
+
+void PclUtils::getCanPts(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &can_pts){
+
+} 
